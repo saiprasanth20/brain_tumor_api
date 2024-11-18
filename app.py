@@ -9,7 +9,7 @@ import os
 app = Flask(__name__)
 
 # Load your trained model
-model = load_model('model.h5')
+model = load_model('brain_tumor_detector.h5')
 
 @app.route('/')
 def home():
