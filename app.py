@@ -1,54 +1,51 @@
-from flask import Flask, render_template, request
-from keras.models import load_model
+from flask import Flask, request, jsonify
 import numpy as np
 import cv2
-from werkzeug.utils import secure_filename
+import tensorflow as tf
+from tensorflow.keras.models import load_model
 import os
 
+# Initialize Flask app
 app = Flask(__name__)
 
-# Load the pre-trained model
-model = load_model('brain_tumor_detector.h5')
-
-# Upload folder for storing images
-UPLOAD_FOLDER = 'static/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Load your trained model
+model = load_model('model.h5')
 
 @app.route('/')
 def home():
-    """Render the home page."""
-    return render_template('index.html')
+    return 'Welcome to the Brain Tumor Prediction API!'
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Handle file upload and prediction."""
-    if request.method == 'POST':
-        if 'image' not in request.files:
-            return render_template('index.html', prediction="No file uploaded!")
-        
+    try:
+        # Get the file from the request
         file = request.files['image']
-        if file and file.filename != '':
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+        
+        # Convert the file to an OpenCV image format
+        img = cv2.imdecode(np.fromstring(file.read(), np.uint8), cv2.IMREAD_COLOR)
 
-            # Preprocess the image
-            img = cv2.imread(file_path)
-            img = cv2.resize(img, (224, 224))  # Resize image to match model input size
-            img = img / 255.0  # Normalize image
-            img = np.expand_dims(img, axis=0)  # Add batch dimension
-            
-            # Make prediction
-            prediction = model.predict(img)
-            result = "Tumor Detected" if prediction[0][0] > 0.5 else "No Tumor Detected"
-            
-            return render_template('index.html', prediction=result, image_path=file_path)
-        else:
-            return render_template('index.html', prediction="No file selected!")
-    else:
-        return render_template('index.html', prediction="Invalid request!")
+        # Resize image to match model's expected input
+        img = cv2.resize(img, (224, 224))  # Resize to 224x224
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
+        img = img.astype('float32') / 255  # Normalize pixel values to [0, 1]
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+        # Add batch dimension to image: (1, 224, 224, 3)
+        img = np.expand_dims(img, axis=0)
+
+        # Check the image shape after processing
+        print(f"Image shape after processing: {img.shape}")
+
+        # Perform prediction
+        prediction = model.predict(img)
+
+        # Return the prediction result (you can customize this as per your output)
+        return jsonify({'prediction': str(prediction[0][0])})
+    
+    except Exception as e:
+        # Handle any exceptions
+        print(f"Error: {e}")
+        return jsonify({'error': 'An error occurred during prediction.'}), 500
+
+if __name__ == "__main__":
+    # Define the port (you can adjust if necessary)
+    app.run(debug=True, host='0.0.0.0', port=10000)
